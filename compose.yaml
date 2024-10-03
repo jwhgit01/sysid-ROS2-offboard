@@ -1,0 +1,8 @@
+version: "3.9"
+services:
+  sysid_offboard:
+    container_name: sysid_offboard
+    build: .
+    tty: true
+    privileged: true
+    restart: unless-stopped
