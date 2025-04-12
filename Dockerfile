@@ -18,4 +18,4 @@ WORKDIR /ros_ws
 RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build"
 
 # Set entry point
-CMD ["/startup.bash"]
+CMD ["/startup_docker.bash"]
