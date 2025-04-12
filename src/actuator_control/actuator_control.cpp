@@ -15,8 +15,7 @@
 #include <px4_msgs/msg/actuator_motors.hpp>
 #include <px4_msgs/msg/input_rc.hpp>
 #include <px4_msgs/msg/manual_control_setpoint.hpp>
-#include <px4_msgs/msg/vehicle_command.hpp>
-#include <px4_msgs/msg/vehicle_control_mode.hpp>
+#include <px4_msgs/msg/vehicle_status.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <stdint.h>
 
@@ -59,7 +58,13 @@ public:
 				dr = msg->yaw;
 				dt = msg->throttle;
 			});
-		
+		rmw_qos_profile_t qos_profile_vs = rmw_qos_profile_sensor_data;
+		auto qos_vs = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_vs.history, 1), qos_profile_vs);
+		vehcile_status_subscriber_ = this->create_subscription<px4_msgs::msg::VehicleStatus>("/fmu/out/vehicle_status", qos_vs,
+			[this](const px4_msgs::msg::VehicleStatus::UniquePtr msg) {
+				offboard_mode = (msg->nav_state == msg->NAVIGATION_STATE_OFFBOARD);
+			});
+
 		// Load CSV
 		load_data();
 		if (InputSignal.count(1)<1) {
@@ -69,10 +74,11 @@ public:
 		}
 
 		auto timer_callback = [this]() -> void {
-			// Publish messages
-			// Note: offboard_control_mode needs to be paired with publish_actuators
 			publish_offboard_control_mode();
-			publish_actuators();
+			// Publish actuators if we are in offboard mode
+			if (offboard_mode) {
+				publish_actuators();
+			}
 		};
 		timer_ = this->create_wall_timer(10ms, timer_callback);
 	}
@@ -86,11 +92,12 @@ private:
 	rclcpp::Publisher<ActuatorMotors>::SharedPtr actuator_motors_publisher_;
 	rclcpp::Subscription<InputRc>::SharedPtr input_rc_subscriber_;
 	rclcpp::Subscription<ManualControlSetpoint>::SharedPtr manual_control_setpoint_subscriber_;
+	rclcpp::Subscription<VehicleStatus>::SharedPtr vehcile_status_subscriber_;
 
 	std::atomic<uint64_t> timestamp_;   //!< common synced timestamped
 
 	// CSV info and map
-	const std::string ms_file = "/home/uav/src/sysid-ROS2-offboard/src/signals/ms_aeroprop_7s1p_T30_f005-075-2_100hz.csv";
+	const std::string ms_file = "./src/signals/ms_aeroprop_7s1p_T30_f005-075-2_100hz.csv";
 	const int T_ms = 30; // seconds
 	const int fs = 100; // Hz
 	std::map<int,std::vector<float>> InputSignal;
@@ -104,6 +111,9 @@ private:
 
 	// Stick positions
 	double da, de, dr, dt;
+
+	// Offboard mode boolean
+	bool offboard_mode;
 
 	void publish_offboard_control_mode();
 	void publish_actuators();
