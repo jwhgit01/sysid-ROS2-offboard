@@ -1,38 +1,13 @@
 /****************************************************************************
  *
- * Copyright 2020 PX4 Development Team. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- * list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its contributors
- * may be used to endorse or promote products derived from this software without
- * specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * Copyright 2025 Jeremy W. Hopwood. All rights reserved.
  *
  ****************************************************************************/
 
 /**
  * @brief Direct actuator control using offboard flight mode
  * @file actuator_control.cpp
+ * @author Jeremy Hopwood <jeremy@hopwoodclan.org>
  */
 
 #include <px4_msgs/msg/offboard_control_mode.hpp>
@@ -94,7 +69,6 @@ public:
 		}
 
 		auto timer_callback = [this]() -> void {
-
 			// Publish messages
 			// Note: offboard_control_mode needs to be paired with publish_actuators
 			publish_offboard_control_mode();
@@ -116,15 +90,15 @@ private:
 	std::atomic<uint64_t> timestamp_;   //!< common synced timestamped
 
 	// CSV info and map
-	const std::string ms_file = "/home/uav/src/sysid-ROS2-offboard/src/signals/ms_aeroprop_T30_f005-075-2_100hz.csv";
-	const int T_ms = 30;
+	const std::string ms_file = "/home/uav/src/sysid-ROS2-offboard/src/signals/ms_aeroprop_7s1p_T30_f005-075-2_100hz.csv";
+	const int T_ms = 30; // seconds
 	const int fs = 100; // Hz
 	std::map<int,std::vector<float>> InputSignal;
-	uint64_t t0 = 0;
+	uint64_t t0 = 0; // microseconds
 	
 	// Amplitude knob andd PTI logic
-	double amp = 0.0;
-	double prop_amp = 0.0;
+	double amp = 0.0; // [0.,1]
+	double prop_amp = 0.0; // [0.,1]
 	uint16_t PTI_PWM;
 	bool PTI = false;
 
@@ -165,12 +139,12 @@ void OffboardControl::publish_actuators()
 
 	// Populate with manual control inputs (ASW-17)
 	msg_servos.control[0] = -da;
-	msg_servos.control[1] = -da;
+	msg_servos.control[1] = da;
 	msg_servos.control[2] = -de;
 	msg_servos.control[3] = dr;
-	msg_servos.control[4] = -1.0; // flaps
-	msg_servos.control[5] = -1.0; // flaps
-	msg_motors.control[0] = 0.5*(dt + 0.99); // map stick [-1,1] to [0,1)
+	msg_servos.control[4] = -(1.0-amp); // flaps
+	msg_servos.control[5] = -(1.0-amp); // flaps
+	msg_motors.control[0] = 0.5*(dt + 0.99); // map stick (-1,1) to [0,1)
 
 	// If we are not in PTI mode, and the PTI switch was engaged, get the initial time.
 	if (!PTI && PTI_PWM > 1500) {
@@ -184,7 +158,7 @@ void OffboardControl::publish_actuators()
 
 		// Compute the time index
 		uint64_t t1 = this->get_clock()->now().nanoseconds() / 1000; // microseconds
-		int time_idx = (int)( (t1-t0)/(1000000/fs) ) % (T_ms*fs); // TODO: fix this
+		int time_idx = (int)( (t1-t0)/(1000000/fs) ) % (T_ms*fs);
 
 		// Get the input excitation vector from the map
 		std::vector<float> input = InputSignal[time_idx];
